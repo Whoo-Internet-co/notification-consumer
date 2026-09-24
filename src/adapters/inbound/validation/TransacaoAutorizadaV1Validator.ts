@@ -1,45 +1,66 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import type { ErrorObject, ValidateFunction } from 'ajv';
+import type { FormatsPlugin } from 'ajv-formats';
 import type { EventValidator } from '../../../application/ports/EventValidator.js';
 import type { AuthorizedTransactionEvent } from '../../../domain/entities/AuthorizedTransactionEvent.js';
 import { InvalidEventError, UnsupportedEventError } from '../../../domain/errors/EventErrors.js';
 
-const requiredStrings = [
-  'event_id',
-  'occurred_at',
-  'id_autorizacao',
-  'id_contrato',
-  'correlation_id',
-] as const;
+const nodeRequire = createRequire(import.meta.url);
 
+/**
+ * Subpath export do package oficial `@whoo-internet-co/finance-platform-contracts`
+ * (ADR-008 — source of truth). `require.resolve` respeita o mapa de `exports`.
+ */
+const SCHEMA_EXPORT =
+  '@whoo-internet-co/finance-platform-contracts/events/transacao-autorizada/v1/schema';
+
+/** Plugin CJS do ajv-formats, carregado com a assinatura callable original. */
+const addFormats = nodeRequire('ajv-formats') as FormatsPlugin;
+
+function loadOfficialSchema(): Record<string, unknown> {
+  const schemaPath = nodeRequire.resolve(SCHEMA_EXPORT);
+  return JSON.parse(readFileSync(schemaPath, 'utf8')) as Record<string, unknown>;
+}
+
+/**
+ * Valida `TransacaoAutorizada` v1 contra o JSON Schema oficial (draft 2020-12)
+ * distribuído pelo package de contratos, usando Ajv + ajv-formats
+ * (`event_id` uuid, `occurred_at` date-time com sufixo Z, `valor > 0`,
+ * `event_version` `^1\.\d+$` — evoluções MINOR são aceitas — e
+ * additionalProperties toleradas).
+ */
 export class TransacaoAutorizadaV1Validator implements EventValidator {
+  private readonly validateFn: ValidateFunction;
+
+  constructor() {
+    const ajv = new Ajv2020({ allErrors: true, strict: false });
+    addFormats(ajv);
+    this.validateFn = ajv.compile(loadOfficialSchema());
+  }
+
   validate(input: unknown): AuthorizedTransactionEvent {
-    if (!isRecord(input)) throw new InvalidEventError('Event must be an object');
-    if (input.event_type !== 'TransacaoAutorizada') {
-      throw new UnsupportedEventError('Unsupported event_type');
+    if (!this.validateFn(input)) {
+      throw toEventError(this.validateFn.errors ?? []);
     }
-    if (input.event_version !== '1.0') {
-      throw new UnsupportedEventError('Unsupported event_version');
-    }
-    for (const field of requiredStrings) {
-      if (typeof input[field] !== 'string' || input[field].length === 0) {
-        throw new InvalidEventError(`Invalid ${field}`);
-      }
-    }
-    if (Number.isNaN(Date.parse(input.occurred_at as string))) {
-      throw new InvalidEventError('Invalid occurred_at');
-    }
-    if (typeof input.valor !== 'number' || !Number.isFinite(input.valor)) {
-      throw new InvalidEventError('Invalid valor');
-    }
-    if (typeof input.saldo_reservado !== 'number' || !Number.isFinite(input.saldo_reservado)) {
-      throw new InvalidEventError('Invalid saldo_reservado');
-    }
-    if (input.trace_id !== null && typeof input.trace_id !== 'string') {
-      throw new InvalidEventError('Invalid trace_id');
-    }
-    return input as unknown as AuthorizedTransactionEvent;
+    return input as AuthorizedTransactionEvent;
   }
 }
 
-function isRecord(input: unknown): input is Record<string, unknown> {
-  return typeof input === 'object' && input !== null && !Array.isArray(input);
+function toEventError(errors: ErrorObject[]): Error {
+  const unsupported = errors.find(
+    (error) => error.instancePath === '/event_type' || error.instancePath === '/event_version',
+  );
+  if (unsupported !== undefined) {
+    return new UnsupportedEventError(`Unsupported ${unsupported.instancePath.slice(1)}`);
+  }
+  return new InvalidEventError(
+    errors
+      .map(
+        (error) =>
+          `${error.instancePath === '' ? '/' : error.instancePath} ${error.message ?? 'is invalid'}`,
+      )
+      .join('; '),
+  );
 }
