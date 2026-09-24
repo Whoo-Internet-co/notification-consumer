@@ -19,7 +19,7 @@ jobs:
           cp .npmrc "$RUNNER_TEMP/npmrc"
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$RUNNER_TEMP/npmrc"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.CONTRACTS_NPM_TOKEN || secrets.GITHUB_TOKEN }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io

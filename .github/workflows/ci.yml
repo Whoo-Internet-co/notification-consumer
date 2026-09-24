@@ -21,7 +21,10 @@ jobs:
       - name: Generate .npmrc auth for GitHub Packages
         run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # O package de contratos é privado (ADR-008). Enquanto o org não vincular
+          # este repo ao package (Package settings > Manage Actions access), usa o
+          # PAT do secret; depois basta remover o secret para cair no GITHUB_TOKEN.
+          NODE_AUTH_TOKEN: ${{ secrets.CONTRACTS_NPM_TOKEN || secrets.GITHUB_TOKEN }}
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -32,4 +35,4 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$RUNNER_TEMP/npmrc"
           docker build --secret id=npmrc,src="$RUNNER_TEMP/npmrc" -t notification-consumer .
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.CONTRACTS_NPM_TOKEN || secrets.GITHUB_TOKEN }}
