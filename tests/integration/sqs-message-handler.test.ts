@@ -30,6 +30,20 @@ describe('SqsMessageHandler', () => {
     expect(transport.acknowledge).toHaveBeenCalledWith('receipt');
   });
 
+  it('unwraps EventBridge envelope detail before processing', async () => {
+    const { handler, transport } = setup();
+    await handler.handle({
+      body: JSON.stringify({
+        'detail-type': 'TransacaoAutorizada',
+        source: 'co.whoo-internet.finance.authorization',
+        detail: event(),
+      }),
+      receiptHandle: 'receipt-eb',
+      messageId: '2',
+    });
+    expect(transport.acknowledge).toHaveBeenCalledWith('receipt-eb');
+  });
+
   it.each([
     { body: undefined, receiptHandle: 'receipt' },
     { body: '{}', receiptHandle: undefined },

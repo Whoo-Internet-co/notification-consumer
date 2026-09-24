@@ -3,6 +3,28 @@ import type { ProcessNotificationEventUseCase } from '../../../application/use-c
 import { InvalidEventError } from '../../../domain/errors/EventErrors.js';
 import type { QueueMessage, QueueTransportPort } from './QueueTransportPort.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Aceita payload flat ou envelope EventBridge (`detail`). */
+function parseMessageBody(body: string): unknown {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    throw new InvalidEventError('SQS message body is not valid JSON');
+  }
+  if (isRecord(parsed) && 'detail' in parsed) {
+    const detail = parsed.detail;
+    if (!isRecord(detail)) {
+      throw new InvalidEventError('EventBridge detail must be a JSON object');
+    }
+    return detail;
+  }
+  return parsed;
+}
+
 export class SqsMessageHandler {
   constructor(
     private readonly processor: ProcessNotificationEventUseCase,
@@ -14,12 +36,7 @@ export class SqsMessageHandler {
     try {
       if (!message.body) throw new InvalidEventError('SQS message has no body');
       if (!message.receiptHandle) throw new InvalidEventError('SQS message has no receipt handle');
-      let payload: unknown;
-      try {
-        payload = JSON.parse(message.body) as unknown;
-      } catch {
-        throw new InvalidEventError('SQS message body is not valid JSON');
-      }
+      const payload = parseMessageBody(message.body);
       await this.processor.execute(payload);
       await this.transport.acknowledge(message.receiptHandle);
     } catch (error) {
