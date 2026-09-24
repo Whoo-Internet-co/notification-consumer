@@ -16,7 +16,8 @@
     "test": "vitest run --coverage"
   },
   "dependencies": {
-    "@aws-sdk/client-sqs": "^3.883.0"
+    "@aws-sdk/client-sqs": "^3.883.0",
+    "@whoo-internet-co/finance-platform-contracts": "^1.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

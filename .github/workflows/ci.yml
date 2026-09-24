@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   validate:
@@ -17,8 +18,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Generate .npmrc auth for GitHub Packages
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm ci
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - run: docker build -t notification-consumer .
+      - name: Build Docker image
+        run: |
+          cp .npmrc "$RUNNER_TEMP/npmrc"
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$RUNNER_TEMP/npmrc"
+          docker build --secret id=npmrc,src="$RUNNER_TEMP/npmrc" -t notification-consumer .
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
