@@ -1,0 +1,12 @@
+{
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "event_type": "TransacaoAutorizada",
+  "event_version": "2.0",
+  "occurred_at": "2026-09-23T20:00:00Z",
+  "id_autorizacao": "AUT-001",
+  "id_contrato": "CTR-001",
+  "valor": 100.00,
+  "saldo_reservado": 900.00,
+  "correlation_id": "CORR-001",
+  "trace_id": null
+}
